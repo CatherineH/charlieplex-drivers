@@ -1,0 +1,10 @@
+// pycharm generated
+.idea
+// quartus generated
+db
+incremental_db
+output_files
+*.qpf
+// makefile generated
+*.cdf
+*.cof
