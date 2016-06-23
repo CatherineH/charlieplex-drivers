@@ -8,3 +8,6 @@ output_files
 // makefile generated
 *.cdf
 *.cof
+
+// animation generated
+doc/*.png
