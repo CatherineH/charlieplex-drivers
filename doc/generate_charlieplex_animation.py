@@ -2,6 +2,9 @@ from svgwrite import Drawing, rgb
 from subprocess import check_output
 from os import path, remove
 from sys import platform as _platform
+from images2gif import writeGif
+from PIL import Image
+
 '''
 This script requires inkscape to convert the svg to png, and imagemagick
 '''
@@ -28,10 +31,14 @@ def generate_frame(i, j, k):
               +" -w "+ str(pixel_width)+" -j -e "+path.join(FOLDERNAME, filename_png)
     result = check_output(command)
     remove(path.join(FOLDERNAME, filename))
+    return Image.open(filename_png)
 
 
 if __name__ == "__main__":
+    frames = []
     for i in range(0, 8):
         for j in range(0, 9):
             for k in range(0, 8):
-                generate_frame(i, j, k)
+                frames.append(generate_frame(i, j, k))
+
+    writeGif(path.join(FOLDERNAME, "animation.gif"), frames, dither=0)
