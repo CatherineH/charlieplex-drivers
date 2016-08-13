@@ -1,3 +1,3 @@
 svgwrite
 pillow
-images2gif
+-e git+https://github.com/CatherineH/images2gif-Pillow.git#egg=images2gif-Pillow
