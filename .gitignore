@@ -4,7 +4,9 @@
 db
 incremental_db
 output_files
+simulation
 *.qpf
+*.qws
 // makefile generated
 *.cdf
 *.cof
