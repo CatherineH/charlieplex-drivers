@@ -29,16 +29,34 @@ def generate_frame(i, j, k):
     filename_png = filename.replace("svg", "png")
     command = INKSCAPE_PATH+" -z -f "+path.join(FOLDERNAME, filename)\
               +" -w "+ str(pixel_width)+" -j -e "+path.join(FOLDERNAME, filename_png)
-    result = check_output(command)
+    print(command)
+    result = check_output(command, shell=True)
     remove(path.join(FOLDERNAME, filename))
     return Image.open(filename_png)
 
+def diode_svg_frame():
+    filename = "diode.svg"
+    fh_svg_in = open("Symbol_LED.svg", "r")
+    in_string = str(fh_svg_in.read())
+    '''
+    in_string = '<path fill="none" stroke="#000"' \
+                ' d="m67,50-32-18v36zm36,0H4m63-18v36M46,25l18-18m7,7-18,18"/>' \
+                '<path d="m57,9 10-5-5,10m2,2 10-5-5,10"/>'
+    '''
+    print(in_string)
+    dwg = Drawing(filename, size=(600, 400))
+    #dwg.add(dwg.svg(in_string))
+    dwg.add(dwg.image.Image(filename))
+    dwg.save()
+
 
 if __name__ == "__main__":
+    '''
     frames = []
     for i in range(0, 8):
         for j in range(0, 9):
             for k in range(0, 8):
                 frames.append(generate_frame(i, j, k))
-
-    writeGif(path.join(FOLDERNAME, "animation.gif"), frames, dither=0)
+    '''
+    diode_svg_frame()
+    #writeGif(path.join(FOLDERNAME, "animation.gif"), frames, dither=0)
