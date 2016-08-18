@@ -14,5 +14,6 @@ simulation
 // animation generated
 doc/*.png
 doc/*.svg
+doc/*.gif
 //pip generated
 doc/src

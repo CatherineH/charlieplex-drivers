@@ -28,7 +28,7 @@ def convert(pixel_width=300, filename="output.csv"):
                                                             filename_png)
     print(command)
     result = check_output(command, shell=True)
-    #remove(path.join(FOLDERNAME, filename))
+    remove(path.join(FOLDERNAME, filename))
     return Image.open(filename_png)
 
 
@@ -49,7 +49,9 @@ def transform_point(point, scale, pos):
         output.append(point[i]*scale[i]+pos[i])
     return output
 
-def make_junction_line(dwg_handle, line_points, junction_radius, line_fill):
+
+def make_junction_line(dwg_handle, line_points, junction_radius, line_fill,
+                       stroke_width):
 
     elements = []
     for point in line_points:
@@ -58,24 +60,25 @@ def make_junction_line(dwg_handle, line_points, junction_radius, line_fill):
                                          fill=line_fill))
     if len(line_points) > 0:
         elements.append(dwg_handle.polyline(points=line_points,
-                         fill="none", stroke=line_fill))
+                                            fill="none", stroke=line_fill,
+                                            stroke_width=stroke_width))
     return elements
 
 
-def diode_svg_frame():
-    filename = "diode.svg"
+def diode_svg_frame(illuminated, num_across=9, num_down=8, frame=0, single_route=-1):
+    filename = "diode{:03d}.svg".format(frame)
     led_symbol = "resources/Symbol_LED.svg"
     image_width = 600
     image_height = 400
-    right_margin = 50
-    dwg = Drawing(filename, size=(image_width+right_margin, image_height),
+    right_margin = 30
+    bottom_margin = 30
+    dwg = Drawing(filename,
+                  size=(image_width+right_margin, image_height+bottom_margin),
                   style="background-color:white")
     # create a white background rectangle
-    dwg.add(dwg.rect(size=(image_width+right_margin, image_height),
+    dwg.add(dwg.rect(size=(image_width+right_margin, image_height+bottom_margin),
                      insert=(0, 0), fill="white"))
-    num_across = 9
-    num_down = 8
-    illuminated = [2, 3]
+
     LED_dimensions = [106.0, 71.0]
     LED_points = [[35, 68], [35, 31], [66, 50]]
     LED_entries = [[4, 50], [103, 50]]
@@ -84,11 +87,15 @@ def diode_svg_frame():
     new_height = new_width*aspect_ratio
     LED_scale = 0.5
     LED_offsets = [new_width*LED_scale/2, new_height*LED_scale]
-    junction_radius = 2.5
+    junction_radius = 1.5
     elements = []
     for i in range(0, num_across):
         x_pos = new_width*(num_across-i-1)
-        if i == illuminated[1]:
+        if illuminated[1] >= illuminated[0]:
+            incoming_wire = illuminated[1] + 1
+        else:
+            incoming_wire = illuminated[1]
+        if i == incoming_wire:
             connection = "+"
             text_fill = "red"
         elif i == illuminated[0]:
@@ -109,30 +116,43 @@ def diode_svg_frame():
             # the led svg
             dwg.add(dwg.image(led_symbol, insert=position,
                               size=(new_width*LED_scale, new_height*LED_scale)))
-            if i == illuminated[0] and j == illuminated[1]:
+            if i == illuminated[0] and j == illuminated[1] and single_route == -1:
                 points = []
                 for point in LED_points:
                     points.append(transform_point(point, scale, position))
                 # the illuminated svg box
                 dwg.add(dwg.polygon(points=points, fill="yellow"))
                 line_fill = "green"
+                stroke_width = 3
                 insert_pos = -1
             else:
                 line_fill = "black"
                 insert_pos = 0
+                stroke_width = 1
             # for each LED, we want to generate a line going from the input
             # to its output
 
             entry_point = transform_point(LED_entries[0], scale, position)
-            if i!=j:
+            if i > j:
                 incoming_line_points = [[new_width*(num_across-j)-LED_offsets[0], 0],
                                     [new_width*(num_across-j)-LED_offsets[0], y_pos+20],
                                     [entry_point[0], y_pos+20], entry_point]
+            elif j > i:
+                incoming_line_points = [
+                    [new_width * (num_across - j - 1) - LED_offsets[0], 0],
+                    [new_width * (num_across - j - 1) - LED_offsets[0],
+                     entry_point[1] + LED_offsets[1]],
+                    [entry_point[0], entry_point[1]+LED_offsets[1]], entry_point]
+            elif i == j:
+                incoming_line_points = [
+                    [new_width * (num_across - j - 1) - LED_offsets[0], 0],
+                    [new_width * (num_across - j - 1) - LED_offsets[0], entry_point[1]], entry_point]
             else:
                 incoming_line_points = []
             elements.insert(insert_pos,
                             make_junction_line(dwg, incoming_line_points,
-                                               junction_radius, line_fill))
+                                               junction_radius, line_fill,
+                                               stroke_width))
             # outgoing line
             exit_point = transform_point(LED_entries[1], scale, position)
             outgoing_line_points = [exit_point,
@@ -141,7 +161,13 @@ def diode_svg_frame():
                                     [x_pos+new_width-LED_offsets[0], 0]]
             elements.insert(insert_pos,
                             make_junction_line(dwg, outgoing_line_points,
-                                               junction_radius, line_fill))
+                                               junction_radius, line_fill,
+                                               stroke_width))
+            route_points = [[new_width * (num_across - j - 1) - LED_offsets[0],
+                             0]]
+            for point in range(0, single_route+1):
+                if point < i:
+                    route_points.append([new_width * (num_across - j - 1) - LED_offsets[0], 0])
     # flatten the elements structure
     elements = sum(elements, [])
     print(elements)
@@ -152,6 +178,14 @@ def diode_svg_frame():
     dwg.save()
     return convert(image_width, filename)
 
+def generate_diode_frames():
+    num_across = 9
+    num_down = 8
+    frame = 0
+    for i in range(0, num_across):
+        for j in range(0, num_down):
+            diode_svg_frame([i, j], num_across, num_down, frame)
+            frame += 1
 
 if __name__ == "__main__":
     '''
@@ -161,5 +195,8 @@ if __name__ == "__main__":
             for k in range(0, 8):
                 frames.append(generate_frame(i, j, k))
     '''
-    diode_svg_frame()
+    num_across = 9
+    num_down = 8
+    diode_svg_frame([3, 4], num_across, num_down, frame=-1)
+
     #writeGif(path.join(FOLDERNAME, "animation.gif"), frames, dither=0)
