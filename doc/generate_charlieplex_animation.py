@@ -28,7 +28,7 @@ def convert(pixel_width=300, filename="output.csv"):
                                                             filename_png)
     print(command)
     result = check_output(command, shell=True)
-    remove(path.join(FOLDERNAME, filename))
+    #remove(path.join(FOLDERNAME, filename))
     return Image.open(filename_png)
 
 
@@ -85,9 +85,9 @@ def diode_svg_frame(illuminated, num_across=9, num_down=8, frame=0, single_route
     aspect_ratio = LED_dimensions[1]/LED_dimensions[0]
     new_width = image_width/num_across
     new_height = new_width*aspect_ratio
-    LED_scale = 0.5
+    LED_scale = 0.75
     LED_offsets = [new_width*LED_scale/2, new_height*LED_scale]
-    junction_radius = 1.5
+    junction_radius = 0.8
     elements = []
     for i in range(0, num_across):
         x_pos = new_width*(num_across-i-1)
@@ -123,12 +123,12 @@ def diode_svg_frame(illuminated, num_across=9, num_down=8, frame=0, single_route
                 # the illuminated svg box
                 dwg.add(dwg.polygon(points=points, fill="yellow"))
                 line_fill = "green"
-                stroke_width = 3
+                stroke_width = 1
                 insert_pos = -1
             else:
                 line_fill = "black"
                 insert_pos = 0
-                stroke_width = 1
+                stroke_width = 0.5
             # for each LED, we want to generate a line going from the input
             # to its output
             entry_point = transform_point(LED_entries[0], scale, position)
