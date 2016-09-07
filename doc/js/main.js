@@ -31,49 +31,63 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
     this.bottom_margin = bottom_margin;
     this.led_loaded = false;
     this.svg_init = false;
+    function position(i, j)
+    {
+        var _x_pos = LED_scale*(this.new_width*(this.num_across-i-1)/LED_scale+this.right_margin);
+        var _y_pos = LED_scale*((this.image_height/this.num_down)*j/LED_scale+this.bottom_margin);
+        return [_x_pos, _y_pos];
+    }
+
     // create a map of the nodes
     this.nodes = [];
+    // node types;
+    // 0 - not a diode (i.e., diag, entry_pins, entrya)
+    // 1 - diode entry (i.e., entryb)
+    // 2 - diode exit (i.e., exit)
+    // connections going 2 to 1 are not allowed. Since entries have buffers,
+    // only certain exits to uncorrelated entries aren't a problem.
+
     this.new_width = this.image_width/this.num_across;
-    for(i=0; i<this.num_across;i++)
+    // generate the nodes, type by type.
+    // first, entry pins
+    for(var i=0; i<this.num_across; i++)
     {
-        for(j=0; j<this.num_down;j++)
+        var pos = position(i, 0);
+        var node = {x_pos:pos[0] + LED_entries[1][0]*LED_scale, y_pos:y_pos[1],
+        size:junction_radius,
+        name: "0entry_pin_"+i,
+        neighbors: []};
+        this.nodes.push(node);
+    }
+    // next, the diagonals
+    for(var i=0; i< _.min([this.num_across, this.num_down]); i++)
+    {
+        var pos = position(i, i);
+        var y_pos = pos[1] + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
+        var x_pos = pos[0] + LED_entries[1][0]*LED_scale;
+        var node = {x_pos: x_pos, y_pos:y_pos, size:junction_radius*4,
+                    name: "0diag_"+i, neighbors: []};
+        this.nodes.push(node);
+    }
+    for(var i=0; i<this.num_across;i++)
+    {
+        for(var j=0; j<this.num_down;j++)
         {
             // add the entry node
-            var x_pos = LED_scale*(this.new_width*(this.num_across-i-1)/LED_scale+this.right_margin);
-            var y_pos = LED_scale*((this.image_height/this.num_down)*j/LED_scale+this.bottom_margin);
             var next_i = i+1;
             var next_j = j+1;
             var prev_i = i-1;
             var prev_j = j-1;
-            // add the diagonal pins
-            if(j==i)
-            {
-                var _neighbors = ["exit_"+i+"_"+j, "entrya_"+next_i+"_"+j];
-                if(prev_j>=0)
-                {
-                    _neighbors.push("exit_"+i+"_"+prev_j);
-                }
-                var node = {x_pos:x_pos + LED_entries[1][0]*LED_scale,
-                            y_pos:y_pos + this.bottom_margin - 0.25*LED_entries[1][0]*LED_scale,
-                            size:junction_radius,
-                            name: "diag_"+i,
-                            neighbors: _neighbors};
-                this.nodes.push(node);
-            }
             // add the output pin terminals
             if(j==0)
             {
-                if(i==0)
+                if(i!=0)
                 {
-                    var _neighbors = ["diag_0"];
-                }
-                else
-                {
-                    var _neighbors = ["exit_"+i+"_0"];
+                    var _neighbors = ["2exit_"+i+"_0"];
                 }
                 var node = {x_pos:x_pos + LED_entries[1][0]*LED_scale, y_pos:y_pos,
                             size:junction_radius,
-                            name: "entry_pin_"+i,
+                            name: "0entry_pin_"+i,
                             neighbors: _neighbors};
                 this.nodes.push(node);
 
@@ -82,68 +96,89 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
             // add the diode entry locations
             // the entry pins have two locations - one over the pin, and one
             // above if j < i, or below if j>=i.
-            if(j>=i)
+            if(j>i)
             {
                 var y_pos_a = y_pos + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale;
                 var y_pos_b = y_pos + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
             }
+            else if(i==j)
+            {
+                var y_pos_b = y_pos + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
+                var y_pos_a = y_pos_b;
+            }
             else{
-                var y_pos_a = y_pos+LED_dimensions[1]*LED_scale/4.0;
+                var y_pos_a = y_pos + LED_dimensions[1]*LED_scale/4.0;
                 var y_pos_b = y_pos + LED_entries[1][1]*LED_scale;
             }
-            var _neighbors = ["entryb_"+i+"_"+j];
+            var _neighbors = ["1entryb_"+i+"_"+j];
 
             if(next_i < this.num_across && j<i)
             {
-                //console.log(i, j, "entrya_"+next_i+"_"+j);
-                _neighbors.push("entrya_"+next_i+"_"+j);
+                _neighbors.push("0entrya_"+next_i+"_"+j);
             }
+            /*
             else if(i==j)
             {
-                _neighbors.push("diag_"+i)
-            }
+                _neighbors.push("0diag_"+i)
+            }*/
 
             if(i>0 && j==0)
             {
-                //console.log("Adding entry pin: ", "entry_pin_"+i, " to ", "entrya_"+i+"_"+j);
-                _neighbors.push("entry_pin_"+i);
+                _neighbors.push("0entry_pin_"+i);
             }
 
             var node = {x_pos:x_pos + LED_entries[0][0]*LED_scale,
                         y_pos:y_pos_a,
-                        size:junction_radius, name:"entrya_"+i+"_"+j,
+                        size:junction_radius, name:"0entrya_"+i+"_"+j,
                         neighbors: _neighbors};
             this.nodes.push(node);
-            var _neighbors = ["exit_"+i+"_"+j, "entrya_"+i+"_"+j];
-
+            var _neighbors = ["2exit_"+i+"_"+j], "0entrya_"+i+"_"+j];
             var node = {x_pos:x_pos + LED_entries[0][0]*LED_scale,
                         y_pos:y_pos_b,
-                        size:junction_radius, name:"entryb_"+i+"_"+j,
+                        size:junction_radius, name:"1entryb_"+i+"_"+j,
                         neighbors: _neighbors};
             this.nodes.push(node);
 
             // add the diode exit locations
-            if(next_j >= this.num_down)
+
+            if(next_i == j)
             {
-                var _neighbors = [];
+            //    var _neighbors = ["diag_"+j];
+            }
+            // the final corner needs to be connected to the bottom right half corner
+            else if(j==7 && i==8){
+                var _neighbors = ['0entrya_'+prev_i+"_"+j];
             }
             else{
-                if(next_i == j)
-                {
-                    var _neighbors = ["diag_"+j];
-                }
-                else
-                {
-                    var _neighbors = ["exit_"+i+"_"+next_j];
-                }
-                var _neighbors.push("exit_"+i+"_"+next_j);
+                var _neighbors = [];
             }
-            console.log("exit pin neighbors for: ", "exit_"+i+"_"+j, _neighbors);
+
+            if(next_j < this.num_down)
+            {
+                _neighbors.push("2exit_"+i+"_"+next_j);
+            }
             var node = {x_pos:x_pos + LED_entries[1][0]*LED_scale,
                         y_pos:y_pos_b,
-                        size:junction_radius, name:"exit_"+i+"_"+j,
+                        size:junction_radius, name:"2exit_"+i+"_"+j,
                         neighbors: _neighbors};
             this.nodes.push(node);
+        }
+    }
+    // mirror the connections
+    for(var i = 0; i<this.nodes.length; i++)
+    {
+        for(var j = 0; j<this.nodes.length; j++)
+        {
+            //console.log(i, j, this.nodes[i], this.nodes[j])
+            var ni = _.indexOf(this.nodes[j].neighbors, this.nodes[i].name);
+            if(ni != -1 && !(this.nodes[i].name[0] == '2' && this.nodes[j].neighbors[ni][0]=='1'))
+            {
+                if(!_.contains(this.nodes[i].neighbors, this.nodes[j].neighbors[ni]))
+                {
+                    console.log(ni, this.nodes[j].neighbors[ni])
+                    this.nodes[i].neighbors.push(this.nodes[j].name);
+                }
+            }
         }
     }
 
@@ -162,20 +197,24 @@ SVG_drawing.prototype.drawSVG = function(){
         //drawn_connections.push(j+"_"+i);
         console.log("indices: "+i+" "+j);
         console.log(i, drawing.nodes[i].name, j, drawing.nodes[j].name);
-        var x_poss = [drawing.nodes[i].x_pos, drawing.nodes[j].x_pos];
-        var y_poss = [drawing.nodes[i].y_pos, drawing.nodes[j].y_pos];
-        var attrs = { stroke: 'black', strokeWidth: 1*LED_scale};
-        // if the points line up to an x/y grid, plot a single line
-
-        if(x_poss[0] == x_poss[1] || y_poss[0] == y_poss[1])
+        // make sure the connection is only drawn once
+        if(!_.contains(drawn_connections, j+"_"+i))
         {
-            drawing.s.line(x_poss[0], y_poss[0], x_poss[1], y_poss[1]).attr(attrs);
+            var x_poss = [drawing.nodes[i].x_pos, drawing.nodes[j].x_pos];
+            var y_poss = [drawing.nodes[i].y_pos, drawing.nodes[j].y_pos];
+            var attrs = { stroke: 'black', strokeWidth: 1*LED_scale};
+            // if the points line up to an x/y grid, plot a single line
 
-        }
-        // else, plot an L curve
-        else{
-            drawing.s.line(x_poss[0], y_poss[0], x_poss[0], y_poss[1]).attr(attrs);
-            drawing.s.line(x_poss[0], y_poss[1], x_poss[1], y_poss[1]).attr(attrs);
+            if(x_poss[0] == x_poss[1] || y_poss[0] == y_poss[1])
+            {
+                drawing.s.line(x_poss[0], y_poss[0], x_poss[1], y_poss[1]).attr(attrs);
+
+            }
+            // else, plot an L curve
+            else{
+                drawing.s.line(x_poss[0], y_poss[0], x_poss[0], y_poss[1]).attr(attrs);
+                drawing.s.line(x_poss[0], y_poss[1], x_poss[1], y_poss[1]).attr(attrs);
+            }
         }
      }
     function find_index(name)
@@ -191,7 +230,8 @@ SVG_drawing.prototype.drawSVG = function(){
     }
     function walk(walk_index)
     {
-        //console.log(walk_index, drawing.nodes[walk_index].name, drawing.nodes[walk_index].neighbors);
+        console.log(walk_index, drawing.nodes[walk_index].name);
+        console.log(drawing.nodes[walk_index].neighbors);
         for(var ni=0; ni < drawing.nodes[walk_index].neighbors.length; ni++)
         {
             var neighbor_index = find_index(drawing.nodes[walk_index].neighbors[ni]);
@@ -256,7 +296,7 @@ SVG_drawing.prototype.drawSVG = function(){
     // walk through the node tree
     for(var i=0; i<this.num_across; i++)
     {
-        var pin_index = find_index('entry_pin_'+i);
+        var pin_index = find_index('0entry_pin_'+i);
 
         walk(pin_index);
     }
