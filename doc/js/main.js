@@ -1,47 +1,83 @@
+function position(_drawing, i, j)
+{
+    if(i>=0)
+    {
+        var _x_pos = LED_scale*(_drawing.new_width*(_drawing.num_across-i-1)/LED_scale+_drawing.right_margin);
+    }
+    else{
+        var _x_pos = _drawing.image_width;
+    }
+    if(j>=0)
+    {
+        var _y_pos = LED_scale*((_drawing.image_height/_drawing.num_down)*j/LED_scale+_drawing.bottom_margin);
+    }
+    else{
+        var _y_pos = _drawing.bottom_margin*LED_scale-LED_entries[1][1]*LED_scale-LED_dimensions[1]*LED_scale/2.0;
+    }
+    return [_x_pos, _y_pos];
+}
+
+function generate_diode_pins(_drawing, i, j, a_offset, b_offset)
+{
+    var pos = position(_drawing, i, j);
+    var y_pos_a = pos[1] + a_offset;
+    var y_pos_b = pos[1] + b_offset;
+    var x_pos_entry = pos[0] + LED_entries[0][0]*LED_scale;
+    var x_pos_exit = pos[0] + LED_entries[1][0]*LED_scale;
+    // "above" pin, the buffer into the diode
+    var node = {x_pos:x_pos_entry, y_pos:y_pos_a, size:junction_radius,
+                name:"0entrya_"+i+"_"+j, neighbors: []};
+    _drawing.nodes.push(node);
+    // "below" pin, directly into the diode
+    var node = {x_pos:x_pos_entry, y_pos:y_pos_b, size:junction_radius,
+                name:"1entryb_"+i+"_"+j, neighbors: []};
+    _drawing.nodes.push(node);
+    // exit pin
+    var node = {x_pos: x_pos_exit, y_pos:y_pos_b, size:junction_radius,
+                name:"2exit_"+i+"_"+j, neighbors: []};
+    _drawing.nodes.push(node);
+}
+
 var SVG_drawing = function (num_across, num_down, image_height, image_width,
                             right_margin, bottom_margin) {
-    if (num_across === undefined) {
-        num_across = 9;
-    }
-    this.num_across = num_across;
+    { // initializing defaults
+        if (num_across === undefined) {
+            num_across = 9;
+        }
+        this.num_across = num_across;
 
-    if (num_down === undefined) {
-        num_down = 8;
-    }
-    this.num_down = num_down;
+        if (num_down === undefined) {
+            num_down = 8;
+        }
+        this.num_down = num_down;
 
-    if (image_height === undefined) {
-        image_height = 400;
-    }
-    this.image_height = image_height;
+        if (image_height === undefined) {
+            image_height = 400;
+        }
+        this.image_height = image_height;
 
-    if (image_width === undefined) {
-        image_width = 600;
-    }
-    this.image_width = image_width;
+        if (image_width === undefined) {
+            image_width = 600;
+        }
+        this.image_width = image_width;
 
-    if (right_margin === undefined) {
-        right_margin = 30;
-    }
-    this.right_margin = right_margin;
+        if (right_margin === undefined) {
+            right_margin = 30;
+        }
+        this.right_margin = right_margin;
 
-    if (bottom_margin === undefined) {
-        bottom_margin = 30;
+        if (bottom_margin === undefined) {
+            bottom_margin = 30;
+        }
+        this.bottom_margin = bottom_margin;
     }
-    this.bottom_margin = bottom_margin;
     this.led_loaded = false;
     this.svg_init = false;
-    function position(i, j)
-    {
-        var _x_pos = LED_scale*(this.new_width*(this.num_across-i-1)/LED_scale+this.right_margin);
-        var _y_pos = LED_scale*((this.image_height/this.num_down)*j/LED_scale+this.bottom_margin);
-        return [_x_pos, _y_pos];
-    }
 
     // create a map of the nodes
     this.nodes = [];
     // node types;
-    // 0 - not a diode (i.e., diag, entry_pins, entrya)
+    // 0 - not a diode (i.e., diag, terminals, entrya)
     // 1 - diode entry (i.e., entryb)
     // 2 - diode exit (i.e., exit)
     // connections going 2 to 1 are not allowed. Since entries have buffers,
@@ -52,118 +88,135 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
     // first, entry pins
     for(var i=0; i<this.num_across; i++)
     {
-        var pos = position(i, 0);
-        var node = {x_pos:pos[0] + LED_entries[1][0]*LED_scale, y_pos:y_pos[1],
-        size:junction_radius,
-        name: "0entry_pin_"+i,
-        neighbors: []};
+        var pos = position(this, i, 0);
+        var node = {x_pos:pos[0] + LED_entries[1][0]*LED_scale, y_pos:pos[1],
+                    size:junction_radius, name: "0terminal_"+i,
+                    neighbors: []};
         this.nodes.push(node);
     }
     // next, the diagonals
-    for(var i=0; i< _.min([this.num_across, this.num_down]); i++)
+    var min_axis = _.min([this.num_across, this.num_down]);
+    for(var i=0; i< min_axis; i++)
     {
-        var pos = position(i, i);
+        var pos = position(this, i-1, i-1);
         var y_pos = pos[1] + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
-        var x_pos = pos[0] + LED_entries[1][0]*LED_scale;
-        var node = {x_pos: x_pos, y_pos:y_pos, size:junction_radius*4,
+        var x_pos = pos[0] - 0.2*LED_entries[1][0]*LED_scale;
+        if(i==0)
+        {
+            console.log("top corner: ", y_pos, x_pos);
+        }
+        var node = {x_pos: x_pos, y_pos:y_pos, size:junction_radius,
                     name: "0diag_"+i, neighbors: []};
         this.nodes.push(node);
     }
+    // next, the diode pins along the diagonal
     for(var i=0; i<this.num_across;i++)
     {
-        for(var j=0; j<this.num_down;j++)
+        var a_offset = LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
+        generate_diode_pins(this, i, i, a_offset, a_offset);
+
+    }
+    // upper left corner
+    for(var i=0; i<this.num_across; i++)
+    {
+        for(var j=0; j<i; j++)
         {
-            // add the entry node
-            var next_i = i+1;
-            var next_j = j+1;
-            var prev_i = i-1;
-            var prev_j = j-1;
-            // add the output pin terminals
-            if(j==0)
-            {
-                if(i!=0)
-                {
-                    var _neighbors = ["2exit_"+i+"_0"];
-                }
-                var node = {x_pos:x_pos + LED_entries[1][0]*LED_scale, y_pos:y_pos,
-                            size:junction_radius,
-                            name: "0entry_pin_"+i,
-                            neighbors: _neighbors};
-                this.nodes.push(node);
-
-            }
-
-            // add the diode entry locations
-            // the entry pins have two locations - one over the pin, and one
-            // above if j < i, or below if j>=i.
-            if(j>i)
-            {
-                var y_pos_a = y_pos + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale;
-                var y_pos_b = y_pos + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
-            }
-            else if(i==j)
-            {
-                var y_pos_b = y_pos + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
-                var y_pos_a = y_pos_b;
-            }
-            else{
-                var y_pos_a = y_pos + LED_dimensions[1]*LED_scale/4.0;
-                var y_pos_b = y_pos + LED_entries[1][1]*LED_scale;
-            }
-            var _neighbors = ["1entryb_"+i+"_"+j];
-
-            if(next_i < this.num_across && j<i)
-            {
-                _neighbors.push("0entrya_"+next_i+"_"+j);
-            }
-            /*
-            else if(i==j)
-            {
-                _neighbors.push("0diag_"+i)
-            }*/
-
-            if(i>0 && j==0)
-            {
-                _neighbors.push("0entry_pin_"+i);
-            }
-
-            var node = {x_pos:x_pos + LED_entries[0][0]*LED_scale,
-                        y_pos:y_pos_a,
-                        size:junction_radius, name:"0entrya_"+i+"_"+j,
-                        neighbors: _neighbors};
-            this.nodes.push(node);
-            var _neighbors = ["2exit_"+i+"_"+j], "0entrya_"+i+"_"+j];
-            var node = {x_pos:x_pos + LED_entries[0][0]*LED_scale,
-                        y_pos:y_pos_b,
-                        size:junction_radius, name:"1entryb_"+i+"_"+j,
-                        neighbors: _neighbors};
-            this.nodes.push(node);
-
-            // add the diode exit locations
-
-            if(next_i == j)
-            {
-            //    var _neighbors = ["diag_"+j];
-            }
-            // the final corner needs to be connected to the bottom right half corner
-            else if(j==7 && i==8){
-                var _neighbors = ['0entrya_'+prev_i+"_"+j];
-            }
-            else{
-                var _neighbors = [];
-            }
-
-            if(next_j < this.num_down)
-            {
-                _neighbors.push("2exit_"+i+"_"+next_j);
-            }
-            var node = {x_pos:x_pos + LED_entries[1][0]*LED_scale,
-                        y_pos:y_pos_b,
-                        size:junction_radius, name:"2exit_"+i+"_"+j,
-                        neighbors: _neighbors};
-            this.nodes.push(node);
+            var a_offset = LED_dimensions[1]*LED_scale/4.0;
+            var b_offset = LED_entries[1][1]*LED_scale;
+            generate_diode_pins(this, i, j, a_offset, b_offset);
         }
     }
+    // bottom right corner
+    for(var j=1; j<this.num_down; j++)
+    {
+        for(var i=0; i<j; i++)
+        {
+            var a_offset = LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale;
+            var b_offset = LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
+            generate_diode_pins(this, i, j, a_offset, b_offset);
+        }
+    }
+    // now, enumerate all rules
+    for(var i=0;i<this.nodes.length; i++)
+    {
+        var _name = this.nodes[i].name;
+        var column = parseInt(_name.split("_")[1]);
+        var prev_column = column-1;
+        var next_column = column+1;
+
+        if(_name.split("_").length==3)
+        {
+            var row = parseInt(_name.split("_")[2]);
+        }
+        else{
+            var row = -1;
+        }
+        
+        // rule 1 - diode entry pins go to their corresponding exit pins
+        if(_name.search('1entryb')>=0)
+        {
+            this.nodes[i].neighbors.push(_name.replace('1entryb', '2exit'));
+        }
+        // rule 2 - diode buffer pins to to the diode entries
+        if(_name.search('0entrya')>=0)
+        {
+            this.nodes[i].neighbors.push(_name.replace('0entrya', '1entryb'));
+        }
+        // rule 3 - terminal pins > 0 go to the exit of the diode right under them
+        if(_name.search("0terminal")>=0 &&  column > 0)
+        {
+            this.nodes[i].neighbors.push(_name.replace("0terminal", "2exit")+"_0");
+        }
+        // rule 4 - first terminal pin goes directly to the first diagonal pin
+        if(_name.search("0terminal_0")>=0)
+        {
+            this.nodes[i].neighbors.push("0diag_0");
+        }
+        // rule 5 - diagonal pins are connected to the exit of the diode
+        // directly above them and to the one directly to the left of them,
+        // and to the entry of the pin directly to the right
+        if(_name.search("0diag_")>=0 && column > 0)
+        {
+            this.nodes[i].neighbors.push("2exit_"+column+"_"+prev_column);
+            this.nodes[i].neighbors.push("2exit_"+prev_column+"_"+prev_column);
+            this.nodes[i].neighbors.push("0entrya_"+next_column+"_"+column);
+        }
+        // rule 6 - top diagonal pin is connected to the entry of the pin to the left of it
+        if(_name.search("0diag_0")>=0)
+        {
+            this.nodes[i].neighbors.push("0entrya_1_0");
+        }
+        // rule 7 - diagonal pins are always connected to the exit of the diode they share a column with
+        if(_name.search("0diag")>=0)
+        {
+            this.nodes[i].neighbors.push("2exit_"+column+"_"+column);
+        }
+        // rule 8 - except for the diodes right above the diagonal and on the
+        // bottom row, diodes exits are alway connected to the diode below
+        if(_name.search("2exit")>=0 && row < this.num_down-1 && row != column-1)
+        {
+            var next_row = row + 1;
+            this.nodes[i].neighbors.push("2exit_"+column+"_"+next_row);
+            if(prev_column>=0)
+            {
+                this.nodes[i].neighbors.push("0entrya_"+prev_column+"_"+row);
+            }
+        }
+        // rule 9 - except for the diodes right above the diagonal and on the
+        // bottom row, diodes entries are alway connected to the diode to the right
+        if(_name.search("0entrya")>=0 && column > 0  && row != column-1)
+        {
+            var next_row = row + 1;
+            this.nodes[i].neighbors.push("0entrya_"+prev_column+"_"+row);
+        }
+        // rule 10 - complete the cycle - the bottom left corner diode's exit
+        // is connected to the entry of the diode to the right of it
+        if(_name.search("2exit_8_7")>=0)
+        {
+            this.nodes[i].neighbors.push("0entrya_7_7");
+        }
+    }
+
     // mirror the connections
     for(var i = 0; i<this.nodes.length; i++)
     {
@@ -171,11 +224,10 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
         {
             //console.log(i, j, this.nodes[i], this.nodes[j])
             var ni = _.indexOf(this.nodes[j].neighbors, this.nodes[i].name);
-            if(ni != -1 && !(this.nodes[i].name[0] == '2' && this.nodes[j].neighbors[ni][0]=='1'))
+            if(ni != -1 && !(this.nodes[i].name[0] == '2' && this.nodes[j].name[0]=='1'))
             {
                 if(!_.contains(this.nodes[i].neighbors, this.nodes[j].neighbors[ni]))
                 {
-                    console.log(ni, this.nodes[j].neighbors[ni])
                     this.nodes[i].neighbors.push(this.nodes[j].name);
                 }
             }
@@ -296,7 +348,7 @@ SVG_drawing.prototype.drawSVG = function(){
     // walk through the node tree
     for(var i=0; i<this.num_across; i++)
     {
-        var pin_index = find_index('0entry_pin_'+i);
+        var pin_index = find_index('0terminal_'+i);
 
         walk(pin_index);
     }
