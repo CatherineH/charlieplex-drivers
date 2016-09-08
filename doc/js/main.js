@@ -232,10 +232,6 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
                 }
             }
         }
-        if(this.nodes[i].name.search("0entrya_")>=0)
-        {
-            console.log(this.nodes[i].name, this.nodes[i].neighbors)
-        }
     }
 
 };
@@ -243,39 +239,45 @@ var LED_entries = [[4, 50], [103, 50]];
 var LED_dimensions = [106.0, 71.0];
 var LED_scale = .5;
 var junction_radius = 1.5;
+var depth = 0;
 
 
 SVG_drawing.prototype.drawSVG = function(){
+    console.log("drawing to depth: ", depth);
     var drawn_connections = [];
+    var current_connections = [];
     var lit = false;
-    function connect_points(i, j)
+    function connect_points(i, j, current, depth_last)
     {
-        drawn_connections.push(i+"_"+j);
+        console.log(i, j, depth_last);
+
+        if(current==1)
+        {
+            var connections = current_connections;
+            //current_connections.push(i+"_"+j);
+        }
+        else{
+            var connections = drawn_connections;
+            drawn_connections.push(i+" "+j);
+        }
         //drawn_connections.push(j+"_"+i);
         // make sure the connection is only drawn once
-        if(!_.contains(drawn_connections, j+"_"+i))
+        if(!_.contains(connections, j+"_"+i))
         {
             var x_poss = [drawing.nodes[i].x_pos, drawing.nodes[j].x_pos];
             var y_poss = [drawing.nodes[i].y_pos, drawing.nodes[j].y_pos];
-            var attrs = { stroke: 'black', strokeWidth: 1*LED_scale};
-            // if the points line up to an x/y grid, plot a single line
-
-            if(x_poss[0] == x_poss[1] || y_poss[0] == y_poss[1])
+            if(current==1)
             {
-                drawing.s.line(x_poss[0], y_poss[0], x_poss[1], y_poss[1]).attr(attrs);
-
+                var attrs = { stroke: 'green', strokeWidth: 2*LED_scale};
             }
-            // else, plot an L curve
-            else{
-                drawing.s.line(x_poss[0], y_poss[0], x_poss[0], y_poss[1]).attr(attrs);
-                drawing.s.line(x_poss[0], y_poss[1], x_poss[1], y_poss[1]).attr(attrs);
+            else
+            {
+                var attrs = { stroke: 'black', strokeWidth: 1*LED_scale};
             }
             var column = drawing.nodes[i].name.split("_")[1];
-
             // add the diode if the connections are going from a 1 to a 2
             if(drawing.nodes[i].name[0] == '1' && drawing.nodes[j].name[0] == '2')
             {
-
                 var led_clone = drawing.led_data.clone();
                 var led_translate = new Snap.Matrix();
                 led_translate.scale(LED_scale);
@@ -292,6 +294,35 @@ SVG_drawing.prototype.drawSVG = function(){
                 //led_clone.transform(led_scale_m);
                 drawing.s.append(led_clone);
             }
+            // if the points line up to an x/y grid, plot a single line
+            if(x_poss[0] == x_poss[1] || y_poss[0] == y_poss[1])
+            {
+                var diff_x = depth_last*(x_poss[1]-x_poss[0])/10.0 + x_poss[0];
+                var diff_y = depth_last*(y_poss[1]-y_poss[0])/10.0 + y_poss[0];
+                drawing.s.line(x_poss[0], y_poss[0], diff_x, diff_y).attr(attrs);
+            }
+            // else, plot an L curve
+            else{
+                var x_distance = Math.abs(x_poss[0]-x_poss[1]);
+                var y_distance = Math.abs(y_poss[0]-y_poss[1]);
+                var total_distance = x_distance + y_distance;
+                if(depth_last>y_distance/total_distance)
+                {
+                    // draw it solidly if the depth has been achieved.
+                    drawing.s.line(x_poss[0], y_poss[0], x_poss[0], y_poss[1]).attr(attrs);
+                }
+                else{
+                    var fraction = depth_last*total_distance/y_distance;
+                    var depth_y_distance = fraction/10.0 + y_poss[0];
+                    drawing.s.line(x_poss[0], y_poss[0], x_poss[0], depth_y_distance).attr(attrs);
+                }
+                if(depth_last>y_distance/total_distance)
+                {
+                    var fraction = (depth_last/10.0 - y_distance/total_distance)/x_distance;
+                    var depth_x_distance = fraction +x_poss[0];
+                    drawing.s.line(x_poss[0], y_poss[1], depth_x_distance, y_poss[1]).attr(attrs);
+                }
+            }
         }
      }
     function find_index(name)
@@ -305,15 +336,31 @@ SVG_drawing.prototype.drawSVG = function(){
         }
         console.log("could not find index of: "+name);
     }
-    function walk(walk_index)
+    function walk(walk_index, current, walk_depth)
     {
+        if(current == 1)
+        {
+            var connections = current_connections;
+        }
+        else{
+            var connections = drawn_connections;
+        }
+        if(walk_depth*10>depth)
+        {
+            return
+        }
         for(var ni=0; ni < drawing.nodes[walk_index].neighbors.length; ni++)
         {
             var neighbor_index = find_index(drawing.nodes[walk_index].neighbors[ni]);
-            if(!_.contains(drawn_connections, walk_index+"_"+neighbor_index))
+            if(!_.contains(connections, walk_index+"_"+neighbor_index))
             {
-                connect_points(walk_index, neighbor_index);
-                walk(neighbor_index);
+                var depth_last = depth - walk_depth*10;
+                if(depth_last>10)
+                {
+                    depth_last = 10;
+                }
+                connect_points(walk_index, neighbor_index, current, depth_last);
+                walk(neighbor_index, current, walk_depth+1);
             }
         }
     }
@@ -334,6 +381,7 @@ SVG_drawing.prototype.drawSVG = function(){
     for(var i=0; i<this.num_across; i++)
     {
         var pin_index = find_index('0terminal_'+i);
+
         // add the pin name
         var text_transform = new Snap.Matrix();
         //text_transform.scale(LED_scale);
@@ -341,8 +389,14 @@ SVG_drawing.prototype.drawSVG = function(){
                                  this.nodes[pin_index].y_pos);
         text = this.s.text(0, 0, i+1).attr({"font-size": 10});
         text.transform(text_transform);
-        walk(pin_index);
+        walk(pin_index, 0, 100);
+        if(i==0)
+        {
+            walk(pin_index, 1, 0);
+        }
     }
+
+
 
 };
 
@@ -352,22 +406,24 @@ SVG_drawing.prototype.onSVGLoaded = function(data){
     var led_transform = new Snap.Matrix();
     led_transform.scale(LED_scale);
     drawing.led_loaded = true;
-    if(drawing.svg_init && drawing.led_loaded)
-    {
-        drawing.drawSVG();
-    }
 };
 
 SVG_drawing.prototype.initializeSVG = function(data){
     drawing.s = Snap("#svg");
     drawing.svg_init = true;
-    if(drawing.svg_init && drawing.led_loaded)
-    {
-        drawing.drawSVG();
-    }
 
 };
 
+function redraw(){
+    if(drawing.svg_init && drawing.led_loaded)
+    {
+        drawing.s.clear();
+        depth += 1;
+        drawing.drawSVG();
+    }
+}
+
 var drawing = new SVG_drawing();
+var myVar = setInterval(redraw, 10);
 var loaded_led_svg = Snap.load("resources/Symbol_LED.svg", drawing.onSVGLoaded);
 window.onload = drawing.initializeSVG;
