@@ -9,10 +9,10 @@ function position(_drawing, i, j)
     }
     if(j>=0)
     {
-        var _y_pos = LED_scale*((_drawing.image_height/_drawing.num_down)*j/LED_scale+_drawing.bottom_margin);
+        var _y_pos = LED_scale*((_drawing.image_height/_drawing.num_down)*j/LED_scale+_drawing.top_margin);
     }
     else{
-        var _y_pos = _drawing.bottom_margin*LED_scale-LED_entries[1][1]*LED_scale-LED_dimensions[1]*LED_scale/2.0;
+        var _y_pos = _drawing.top_margin*LED_scale-LED_entries[1][1]*LED_scale-LED_dimensions[1]*LED_scale/2.0;
     }
     return [_x_pos, _y_pos];
 }
@@ -39,7 +39,7 @@ function generate_diode_pins(_drawing, i, j, a_offset, b_offset)
 }
 
 var SVG_drawing = function (num_across, num_down, image_height, image_width,
-                            right_margin, bottom_margin) {
+                            right_margin, bottom_margin, top_margin) {
     { // initializing defaults
         if (num_across === undefined) {
             num_across = 9;
@@ -67,9 +67,15 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
         this.right_margin = right_margin;
 
         if (bottom_margin === undefined) {
-            bottom_margin = 30;
+            bottom_margin = 50;
         }
         this.bottom_margin = bottom_margin;
+
+        if (top_margin === undefined) {
+            top_margin = 30;
+        }
+        this.top_margin = top_margin;
+
     }
     this.led_loaded = false;
     this.svg_init = false;
@@ -98,41 +104,36 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
     var min_axis = _.min([this.num_across, this.num_down]);
     for(var i=0; i< min_axis; i++)
     {
-        var pos = position(this, i-1, i-1);
-        var y_pos = pos[1] + LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
-        var x_pos = pos[0] - 0.2*LED_entries[1][0]*LED_scale;
-        if(i==0)
-        {
-            console.log("top corner: ", y_pos, x_pos);
-        }
+        var pos = position(this, i, i);
+        var y_pos = pos[1] + LED_dimensions[1]*LED_scale/4.0;
+        var x_pos = pos[0] + LED_entries[1][0]*LED_scale;
+
         var node = {x_pos: x_pos, y_pos:y_pos, size:junction_radius,
                     name: "0diag_"+i, neighbors: []};
         this.nodes.push(node);
     }
-    // next, the diode pins along the diagonal
-    for(var i=0; i<this.num_across;i++)
+    // next, the diode pins in the first column
+    for(var j=0; j<this.num_across;j++)
     {
-        var a_offset = LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
-        generate_diode_pins(this, i, i, a_offset, a_offset);
+        var a_offset = -LED_dimensions[1]*LED_scale/4.0 + this.image_height/this.num_down;
+
+        generate_diode_pins(this, 0, j, a_offset, a_offset);
 
     }
-    // upper left corner
-    for(var i=0; i<this.num_across; i++)
+    // all other diode pins
+    for(var i=1; i<this.num_across; i++)
     {
-        for(var j=0; j<i; j++)
+        for(var j=0; j<this.num_down; j++)
         {
-            var a_offset = LED_dimensions[1]*LED_scale/4.0;
+            if(i>j)
+            {
+                var a_offset = LED_dimensions[1]*LED_scale/4.0;
+            }
+            else
+            {
+                var a_offset = -LED_dimensions[1]*LED_scale/4.0 + this.image_height/this.num_down;
+            }
             var b_offset = LED_entries[1][1]*LED_scale;
-            generate_diode_pins(this, i, j, a_offset, b_offset);
-        }
-    }
-    // bottom right corner
-    for(var j=1; j<this.num_down; j++)
-    {
-        for(var i=0; i<j; i++)
-        {
-            var a_offset = LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale;
-            var b_offset = LED_entries[1][1]*LED_scale+LED_dimensions[1]*LED_scale/2.0;
             generate_diode_pins(this, i, j, a_offset, b_offset);
         }
     }
@@ -177,9 +178,13 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
         // and to the entry of the pin directly to the right
         if(_name.search("0diag_")>=0 && column > 0)
         {
+            var next_next_column = next_column+1;
             this.nodes[i].neighbors.push("2exit_"+column+"_"+prev_column);
-            this.nodes[i].neighbors.push("2exit_"+prev_column+"_"+prev_column);
-            this.nodes[i].neighbors.push("0entrya_"+next_column+"_"+column);
+            if(next_column<this.num_across)
+            {
+                this.nodes[i].neighbors.push("0entrya_"+next_column+"_"+column);
+            }
+            this.nodes[i].neighbors.push("0entrya_"+prev_column+"_"+prev_column);
         }
         // rule 6 - top diagonal pin is connected to the entry of the pin to the left of it
         if(_name.search("0diag_0")>=0)
@@ -197,10 +202,6 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
         {
             var next_row = row + 1;
             this.nodes[i].neighbors.push("2exit_"+column+"_"+next_row);
-            if(prev_column>=0)
-            {
-                this.nodes[i].neighbors.push("0entrya_"+prev_column+"_"+row);
-            }
         }
         // rule 9 - except for the diodes right above the diagonal and on the
         // bottom row, diodes entries are alway connected to the diode to the right
@@ -222,7 +223,6 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
     {
         for(var j = 0; j<this.nodes.length; j++)
         {
-            //console.log(i, j, this.nodes[i], this.nodes[j])
             var ni = _.indexOf(this.nodes[j].neighbors, this.nodes[i].name);
             if(ni != -1 && !(this.nodes[i].name[0] == '2' && this.nodes[j].name[0]=='1'))
             {
@@ -232,23 +232,26 @@ var SVG_drawing = function (num_across, num_down, image_height, image_width,
                 }
             }
         }
+        if(this.nodes[i].name.search("0entrya_")>=0)
+        {
+            console.log(this.nodes[i].name, this.nodes[i].neighbors)
+        }
     }
 
 };
 var LED_entries = [[4, 50], [103, 50]];
 var LED_dimensions = [106.0, 71.0];
 var LED_scale = .5;
-var junction_radius = 1.0;
+var junction_radius = 1.5;
 
 
 SVG_drawing.prototype.drawSVG = function(){
     var drawn_connections = [];
+    var lit = false;
     function connect_points(i, j)
     {
         drawn_connections.push(i+"_"+j);
         //drawn_connections.push(j+"_"+i);
-        console.log("indices: "+i+" "+j);
-        console.log(i, drawing.nodes[i].name, j, drawing.nodes[j].name);
         // make sure the connection is only drawn once
         if(!_.contains(drawn_connections, j+"_"+i))
         {
@@ -267,6 +270,28 @@ SVG_drawing.prototype.drawSVG = function(){
                 drawing.s.line(x_poss[0], y_poss[0], x_poss[0], y_poss[1]).attr(attrs);
                 drawing.s.line(x_poss[0], y_poss[1], x_poss[1], y_poss[1]).attr(attrs);
             }
+            var column = drawing.nodes[i].name.split("_")[1];
+
+            // add the diode if the connections are going from a 1 to a 2
+            if(drawing.nodes[i].name[0] == '1' && drawing.nodes[j].name[0] == '2')
+            {
+
+                var led_clone = drawing.led_data.clone();
+                var led_translate = new Snap.Matrix();
+                led_translate.scale(LED_scale);
+                if(lit)
+                {
+                    led_clone.select("path[stroke='#000']").attr({fill: "#ffff00"});
+                }
+
+                led_translate.translate((x_poss[0])/LED_scale-LED_entries[0][0],
+                                        (y_poss[0])/LED_scale-LED_entries[0][1]);
+                led_clone.transform(led_translate);
+                var led_scale_m = new Snap.Matrix();
+                led_scale_m.scale(LED_scale);
+                //led_clone.transform(led_scale_m);
+                drawing.s.append(led_clone);
+            }
         }
      }
     function find_index(name)
@@ -282,8 +307,6 @@ SVG_drawing.prototype.drawSVG = function(){
     }
     function walk(walk_index)
     {
-        console.log(walk_index, drawing.nodes[walk_index].name);
-        console.log(drawing.nodes[walk_index].neighbors);
         for(var ni=0; ni < drawing.nodes[walk_index].neighbors.length; ni++)
         {
             var neighbor_index = find_index(drawing.nodes[walk_index].neighbors[ni]);
@@ -297,59 +320,27 @@ SVG_drawing.prototype.drawSVG = function(){
     var LED_points = [[35, 68], [35, 31], [66, 50]];
 
     var aspect_ratio = LED_dimensions[1]/LED_dimensions[0];
-    var new_height = this.new_width*aspect_ratio;
+    var new_height = this.new_width*aspect_ratio+this.bottom_margin;
     var LED_offsets = [this.new_width*LED_scale/2, new_height*LED_scale];
     var current_led = [2, 1];
-
-    for(var i = 0; i < this.num_across; i++)
-    {
-        var x_pos = this.right_margin+this.new_width*(this.num_across-i-1)/LED_scale;
-
-        for(j = 0; j< this.num_down;j++)
-        {
-            var y_pos = this.bottom_margin+(this.image_height/this.num_down)*j/LED_scale;
-            var position = [x_pos+LED_offsets[0], y_pos+LED_offsets[1]];
-            var text_transform = new Snap.Matrix();
-            text_transform.scale(LED_scale);
-            text_transform.translate(x_pos+LED_dimensions[0], y_pos);
-            // add the label for the terminal pin
-            if(j==0)
-            {
-                text = this.s.text(0, 0, i+1);
-                text.transform(text_transform);
-
-            }
-            var led_clone = this.led_data.clone();
-            var led_transform = new Snap.Matrix();
-
-            // offset the lower right triangle
-            if(j>=i)
-            {
-                y_pos += LED_dimensions[1]/2.0;
-
-            }
-            led_transform.scale(LED_scale);
-            led_transform.translate(x_pos, y_pos);
-            led_clone.transform(led_transform);
-
-
-            if(i==current_led[0] && j==current_led[1])
-            {
-                led_clone.select("path[stroke='#000']").attr({fill: "#ffff00"});
-            }
-            this.s.append(led_clone);
-        }
-    }
     for(var i = 0; i < this.nodes.length; i++)
     {
         this.s.circle(this.nodes[i].x_pos, this.nodes[i].y_pos,
-                      this.nodes[i].size).attr({ stroke: 'None', stroke_width: 0.3, fill: 'black' });
+                      this.nodes[i].size).attr({ stroke: 'None',
+                                                 stroke_width: 0.3,
+                                                 fill: 'black' });
     }
     // walk through the node tree
     for(var i=0; i<this.num_across; i++)
     {
         var pin_index = find_index('0terminal_'+i);
-
+        // add the pin name
+        var text_transform = new Snap.Matrix();
+        //text_transform.scale(LED_scale);
+        text_transform.translate(this.nodes[pin_index].x_pos,
+                                 this.nodes[pin_index].y_pos);
+        text = this.s.text(0, 0, i+1).attr({"font-size": 10});
+        text.transform(text_transform);
         walk(pin_index);
     }
 
@@ -358,6 +349,8 @@ SVG_drawing.prototype.drawSVG = function(){
 
 SVG_drawing.prototype.onSVGLoaded = function(data){
     drawing.led_data = data.select("g");
+    var led_transform = new Snap.Matrix();
+    led_transform.scale(LED_scale);
     drawing.led_loaded = true;
     if(drawing.svg_init && drawing.led_loaded)
     {
