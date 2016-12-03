@@ -1,4 +1,4 @@
-module charlieplex_driver
+module verilog_version
 (
 // {ALTERA_ARGS_BEGIN} DO NOT REMOVE THIS LINE!
 	input CLK_50,
