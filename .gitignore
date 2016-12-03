@@ -17,3 +17,6 @@ doc/*.svg
 doc/*.gif
 //pip generated
 doc/src
+
+//jekyll generated
+_site

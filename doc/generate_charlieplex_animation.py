@@ -131,7 +131,6 @@ def diode_svg_frame(illuminated, num_across=9, num_down=8, frame=0, single_route
                 stroke_width = 0.5
             # for each LED, we want to generate a line going from the input
             # to its output
-
             entry_point = transform_point(LED_entries[0], scale, position)
             if i > j:
                 incoming_line_points = [[new_width*(num_across-j)-LED_offsets[0], 0],
@@ -168,15 +167,23 @@ def diode_svg_frame(illuminated, num_across=9, num_down=8, frame=0, single_route
             for point in range(0, single_route+1):
                 if point < i:
                     route_points.append([new_width * (num_across - j - 1) - LED_offsets[0], 0])
+
+            # now create the network
+            nodes = []
+            for i in range(0, num_across):
+                for j in range(0, num_down):
+                    nodes.append(entry_point)
+                    nodes.append(exit_point)
     # flatten the elements structure
     elements = sum(elements, [])
     print(elements)
     # the lines should be drawn last so that they are layered on top of all
     # other elements
-    for element in elements:
-        dwg.add(element)
+    #for element in elements:
+    #    dwg.add(element)
     dwg.save()
     return convert(image_width, filename)
+
 
 def generate_diode_frames():
     num_across = 9
