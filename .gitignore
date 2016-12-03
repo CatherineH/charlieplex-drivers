@@ -20,3 +20,7 @@ doc/src
 
 //jekyll generated
 _site
+
+//eagle projects
+*.s#*
+*.b#*
